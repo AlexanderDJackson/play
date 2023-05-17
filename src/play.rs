@@ -2,10 +2,15 @@ pub mod game {
     use std::convert::{From, Into};
     use std::fmt::Display;
 
+    pub enum Depth {
+        Unlimited,
+        Depth(usize),
+    }
+    
     pub trait Game: Clone + Copy + Display + Eq + Sized + Into<Self> + From<String> {
         fn new() -> Self;
         fn moves(&self) -> Box<dyn Iterator<Item = Self>>;
-        fn score(&self, depth: Option<usize>) -> isize;
+        fn score(&self, depth: Depth) -> isize;
     }
 
     /// A game of tic-tac-toe.
@@ -21,10 +26,7 @@ pub mod game {
     impl TicTacToe {
         fn won(&self) -> isize {
             let x = ((self.state >> 22) ^ 0b1000000000) & 0b111111111;
-            // print 32 bit binary representation of x
-            // println!("x: {:032b}", x);
             let o = ((self.state >> 13) ^ 0b1000000000) & 0b111111111;
-            // println!("o: {:032b}", o);
 
             // check for X horizontal wins
             if x & 0b111000000 == 0b111000000 ||
@@ -89,9 +91,9 @@ pub mod game {
                 if occupied & (1 << (31 - i)) == 0 {
                     moves.push(TicTacToe {
                         state: if lsb == 0 {
-                            (self.state | (1 << (21 - i))) ^ (lsb << 31)
+                            (self.state | (1 << (21 - i))) ^ (1 << 31)
                         } else {
-                            (self.state | (1 << (30 - i))) ^ (lsb << 31)
+                            (self.state | (1 << (30 - i))) ^ (1 << 31)
                         },
                     });
                 }
@@ -102,22 +104,21 @@ pub mod game {
 
         /// Return the score of the current game state.
         /// A score of 1 means X wins, -1 means O wins, 0 means a draw.
-        fn score(&self, depth: Option<usize>) -> isize {
+        fn score(&self, depth: Depth) -> isize {
             let won = self.won();
             if won != 0 {
                 return won;
             } else {
-                //println!("{self}");
                 match depth {
-                    Some(_) => todo!(),
-                    None => {
+                    Depth::Depth(_) => todo!(),
+                    Depth::Unlimited => {
                         if self.moves().count() == 0 {
                             return won
                         } else {
                             if (self.state >> 31) & 0b1 == 1 {
-                                return self.moves().map(|m| m.score(None)).max().unwrap();
+                                return self.moves().map(|m| m.score(Depth::Unlimited)).max().unwrap();
                             } else {
-                                return self.moves().map(|m| m.score(None)).min().unwrap();
+                                return self.moves().map(|m| m.score(Depth::Unlimited)).min().unwrap();
                             }
                         }
                     }
@@ -134,8 +135,15 @@ pub mod game {
                 panic!("Invalid game string length");
             }
 
+            let num_x = s.chars().filter(|c| *c == 'X').count() as isize;
+            let num_o = s.chars().filter(|c| *c == 'O').count() as isize;
+
+            if (num_x - num_o).abs() > 1 {
+                panic!("Invalid game string");
+            }
+
             // an even number of Xs and Os means it's X's turn
-            if s.chars().filter(|c| *c == 'X' || *c == 'O').count() % 2 == 0 {
+            if (num_x + num_o) % 2 == 0 {
                 state |= 1 << 31;
             }
 
@@ -148,7 +156,6 @@ pub mod game {
                 }
             }
 
-            println!("state: {:032b}", state);
             TicTacToe { state }
         }
     }
